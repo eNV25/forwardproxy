@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/subtle"
 	"crypto/tls"
 	"encoding/base64"
@@ -27,7 +28,8 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"math/rand"
+	"math"
+	"math/big"
 	"net"
 	"net/http"
 	"net/url"
@@ -230,6 +232,22 @@ func (h *Handler) Provision(ctx caddy.Context) error {
 	return nil
 }
 
+func randUint64() uint64 {
+	rnd, _ := rand.Int(rand.Reader, new(big.Int).SetUint64(math.MaxUint64))
+	if rnd == nil {
+		return 0
+	}
+	return rnd.Uint64()
+}
+
+func randIntN(max int) int {
+	rnd, _ := rand.Int(rand.Reader, new(big.Int).SetInt64(int64(max)))
+	if rnd == nil {
+		return 0
+	}
+	return int(rnd.Int64())
+}
+
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
 	// start by splitting the request host and port
 	reqHost, _, err := net.SplitHostPort(r.Host)
@@ -294,9 +312,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyht
 				fmt.Errorf("ResponseWriter doesn't implement http.Flusher"))
 		}
 		// Creates a padding of [30, 30+32)
-		paddingLen := rand.Intn(32) + 30
+		paddingLen := randIntN(32) + 30
 		padding := make([]byte, paddingLen)
-		bits := rand.Uint64()
+		bits := randUint64()
 		for i := 0; i < 16; i++ {
 			// Codes that won't be Huffman coded.
 			padding[i] = "!#$()+<>?@[]^`{}"[bits&15]
@@ -661,7 +679,7 @@ func flushingIoCopy(dst io.Writer, src io.Reader, buf []byte, paddingType int) (
 		var er error
 		if paddingType == AddPadding && numPadding < NumFirstPaddings {
 			numPadding++
-			paddingSize := rand.Intn(256)
+			paddingSize := randIntN(256)
 			maxRead := 65536 - 3 - paddingSize
 			nr, er = src.Read(buf[3:maxRead])
 			if nr > 0 {
